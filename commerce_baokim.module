@@ -2,12 +2,31 @@
 /**
  * @file
  * Module to integration BaoKim payment gateway to Drupal Commerce system.
- *
+ */
+
+/**
+ * @TODO: DOCME
  */
 define('BAOKIM_SANDBOX_URL', 'http://sandbox.baokim.vn/payment/order/version11');
+
+/**
+ * @TODO: DOCME
+ */
 define('BAOKIM_SANDBOX_VERIFY_URL', 'http://sandbox.baokim.vn/bpn/verify');
+
+/**
+ * @TODO: DOCME
+ */
 define('BAOKIM_LIVE_URL', 'https://www.baokim.vn/payment/order/version11');
+
+/**
+ * @TODO: DOCME
+ */
 define('BAOKIM_LIVE_VERIFY_URL', 'https://www.baokim.vn/bpn/verify');
+
+/**
+ * @TODO: DOCME
+ */
 define('BAOKIM_SUCCESS_CALLBACK_URL', 'commerce_baokim/callback');
 
 /**
@@ -38,116 +57,6 @@ function commerce_baokim_menu() {
 }
 
 /**
- * Say thank you page
- */
-function commerce_baokim_thank_you_page($ipn, $order, $settings, $payment_method) {
-  // $rs = commerce_baokim_check_transaction_status($ipn['transaction_status']);
-  $output = t('Your order is number @order_id. You can view your order on your account page when logged in.', array('@order_id' => $order->order_id));
-  $output .= '<br/>' . t('Thank you for your payment.');
-  return $output;
-}
-
-/**
- * Function proccess BPN callback
- */
-function commerce_baokim_ipn_proccess($ipn, $order, $settings, $payment_method) {
-  //verify success
-  watchdog('commerce_baokim', 'Step1: SUCCESS - Payment response is verified.');
-
-  // If this is a prior authorization capture IPN for which we've already
-  // created a transaction...
-  $auth_ipn = commerce_baokim_ipn_load($ipn['transaction_id']);
-  if ($auth_ipn) {
-    // Load the prior IPN's transaction and update that with the capture values.
-    $transaction = commerce_payment_transaction_load($auth_ipn['transaction_id']);
-  }
-  else {
-    // Create a new payment transaction for the order.
-    $transaction = commerce_payment_transaction_new('baokim', $order->order_id);
-    $transaction->instance_id = $payment_method['instance_id'];
-  }
-  $transaction->remote_id = $ipn['transaction_id'];
-
-  //BaoKim only support VND
-  $transaction->amount = commerce_currency_decimal_to_amount($ipn['total_amount'], $settings['currency_code']);
-  $transaction->currency_code = $settings['currency_code'];
-  $transaction->payload[REQUEST_TIME] = $ipn;
-  $transaction->payment_method = 'baokim';
-
-  // Set the transaction's statuses based on the IPN's payment_status.
-  $transaction->remote_status = $ipn['transaction_status'];
-
-  //check and store payment info
-  $rs = commerce_baokim_check_transaction_status($ipn['transaction_status']);
-  $transaction->message = $rs['message'];
-  $transaction->status = $rs['status'];
-
-  //ensure data before write a record
-  $ipn['txn_id'] = $ipn['transaction_id'];
-  $ipn['payment_status'] = $ipn['transaction_status'];
-
-  //save payment info and commerce baokim ipn info
-  //save payment info
-  // Save the transaction information.
-  commerce_payment_transaction_save($transaction);
-  $ipn['transaction_id'] = $transaction->transaction_id;
-
-  //save BaoKim ipn
-  commerce_baokim_ipn_save($ipn);
-
-  // Create a billing profile based on the IPN if enabled.
-
-  commerce_payment_redirect_pane_next_page($order);
-  watchdog('commerce_baokim', 'Step2: IPN processed for Order @order_number with ID @txn_id.', array('@txn_id' => $ipn['txn_id'], '@order_number' => $order->order_number), WATCHDOG_INFO);
-}
-
-function commerce_baokim_check_transaction_status($transaction_status) {
-  //check and store payment info
-  $msg = commerce_baokim_get_payment_status_name($transaction_status);
-  $status = 'unknown';
-
-  switch ($transaction_status) {
-    //payment failed
-    case 1:
-    case 2:
-    case 13:
-      //payment pending
-      $status = COMMERCE_PAYMENT_STATUS_PENDING;
-      break;
-
-    case 5:
-    case 6:
-    case 7:
-    case 8:
-    case 12:
-    case 15:
-      $status = COMMERCE_PAYMENT_STATUS_FAILURE;
-      break;
-
-    //payment completed
-    case 4:
-      //check if ipn total_amount != order's total_amount
-      //do not change transaction_status to COMPLETED
-      //need it?
-
-      $status = COMMERCE_PAYMENT_STATUS_SUCCESS;
-      $msg = t('The payment has completed.');
-      break;
-
-    //other status
-    default:
-      $status = COMMERCE_PAYMENT_STATUS_FAILURE;
-      $msg = t('Do not know what\'s happended. Payment status (transaction_status from BaoKim) @id', array('@id' => $transaction_status));
-      break;
-  }
-
-  return array(
-    'message' => $msg,
-    'status' => $status
-  );
-}
-
-/**
  * Saves an IPN with some meta data related to local processing.
  *
  * @param $ipn
@@ -162,13 +71,11 @@ function commerce_baokim_check_transaction_status($transaction_status) {
 function commerce_baokim_ipn_save($ipn) {
   if (!empty($ipn['ipn_id']) && commerce_baokim_ipn_load($ipn['txn_id'])) {
     $ipn['changed'] = REQUEST_TIME;
-
     return drupal_write_record('commerce_baokim_ipn', $ipn, 'ipn_id');
   }
   else {
     $ipn['created'] = REQUEST_TIME;
     $ipn['changed'] = REQUEST_TIME;
-
     return drupal_write_record('commerce_baokim_ipn', $ipn);
   }
 }
@@ -229,8 +136,6 @@ function commerce_baokim_get_payment_type_name($payment_type_id) {
  * Implements hook_commerce_payment_method_info().
  */
 function commerce_baokim_commerce_payment_method_info() {
-  $payment_methods = array();
-
   $payment_methods['baokim'] = array(
     'base' => 'commerce_baokim',
     'title' => t('BaoKim payment'),
@@ -345,7 +250,7 @@ function commerce_baokim_submit_form_submit($payment_method, $pane_form, $pane_v
     return array();
   }
 
-  //update order status
+  // update order status
   commerce_order_status_update($order, 'checkout_payment');
 
   $payment_method['settings']['cancel_return'] = url('checkout/' . $order->order_id . '/payment/back/' . $order->data['payment_redirect_key'], array('absolute' => TRUE));
@@ -387,7 +292,7 @@ function commerce_baokim_redirect_to_baokim($order, $settings) {
   // Ensure a default value for the payment_method setting.
   $settings += array('payment_method' => '');
 
-  //prepare data and send to baokim
+  // prepare data and send to baokim
   $baoKimURL = ($settings['server'] == 'sandbox') ? BAOKIM_SANDBOX_URL : BAOKIM_LIVE_URL;
   $baoKim = new BaoKimPayment($baoKimURL, $settings['merchantID'], $settings['securePass']);
 
@@ -396,9 +301,9 @@ function commerce_baokim_redirect_to_baokim($order, $settings) {
     $total_amount = commerce_currency_amount_to_decimal(commerce_currency_convert($amount, $order_currency_code, $currency_code), $currency_code);
   }
 
-  $urlBKRequest = $baoKim->createRequestUrl(
+  $url = $baoKim->createRequestUrl(
     $order->order_number, $settings['email'], $total_amount, 0, 0, t('Order @order_number at @store', array('@order_number' => $order->order_number, '@store' => variable_get('site_name', url('<front>', array('absolute' => TRUE))))), url(BAOKIM_SUCCESS_CALLBACK_URL, array('absolute' => TRUE)), $settings['cancel_return'], $base_url /* TEMP */
   );
 
-  drupal_goto($urlBKRequest);
+  drupal_goto($url);
 }
