@@ -1,11 +1,9 @@
 ﻿<?php
-
 /**
  * @file
- * Provides an example payment method for Drupal Commerce for testing and
- *   development.
+ * Module to integration BaoKim payment gateway to Drupal Commerce system.
+ *
  */
-
 define('BAOKIM_SANDBOX_URL', 'http://sandbox.baokim.vn/payment/order/version11');
 define('BAOKIM_SANDBOX_VERIFY_URL', 'http://sandbox.baokim.vn/bpn/verify');
 define('BAOKIM_LIVE_URL', 'https://www.baokim.vn/payment/order/version11');
@@ -16,8 +14,6 @@ define('BAOKIM_SUCCESS_CALLBACK_URL', 'commerce_baokim/callback');
  * Implements hook_menu().
  */
 function commerce_baokim_menu() {
-  $items = array();
-
   // Define an always accessible path to receive BPNs.
   // This URL will be given BaoKim when register new site.
   $items['commerce_baokim/callback/bpn'] = array(
@@ -441,8 +437,7 @@ function commerce_baokim_submit_form($payment_method, $pane_values, $checkout_pa
  */
 function commerce_baokim_submit_form_submit($payment_method, $pane_form, $pane_values, $order, $charge) {
   // Return an error if the enabling action's settings haven't been configured.
-  if (empty($payment_method['settings']['email']) || empty($payment_method['settings']['merchantID'])
-    || empty($payment_method['settings']['securePass'])) {
+  if (empty($payment_method['settings']['email']) || empty($payment_method['settings']['merchantID']) || empty($payment_method['settings']['securePass'])) {
     drupal_set_message(t('BaoKim payment is not configured for use.'), 'error');
     return array();
   }
